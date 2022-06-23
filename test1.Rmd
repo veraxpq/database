@@ -1,0 +1,31 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+```{r}
+library(RSQLite)
+
+fpath = "/Users/pengqing/Downloads/"
+dbfile = "sakila.db"
+
+dbcon <- dbConnect(RSQLite::SQLite(), paste0(fpath, dbfile))
+```
+
+```{r}
+dbListTables(dbcon)
+```
+```{r, }
+sql <- "SELECT * FROM film"
+dq <- dbGetQuery(dbcon, sql)
+head(dq)
+```
+
+```{sql connection=dbcon}
+.indexes
+```
+PRAGMA index_list('film')
+
+```{r}
+sql <- "SELECT * FROM film WHERE "
+```
+

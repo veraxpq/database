@@ -1,0 +1,240 @@
+---
+title: "Practicum 2"
+authors: Jingyi Ji, Qing Peng
+output:
+  html_document:
+    df_print: paged
+---
+
+3. (2 pts / 0.5 hrs) Include an image of an ERD showing your model in your R Notebook. 
+```{r}
+#install.packages("knitr")
+#install.packages("png")
+
+library(knitr)
+library(png)
+knitr::include_graphics("https://i.imgur.com/0Yrvelz.png")
+```
+4. (10 pts / 1 hr) Realize the relational schema in SQLite (place the CREATE TABLE statements into SQL chunks in your R Notebook). Use the appropriate tag for publication date. See this link (Links to an external site.) for information.
+```{r}
+library(RSQLite)
+
+fpath = "/Users/pengqing/"
+dbfile = "part1.db"
+
+dbcon <- dbConnect(RSQLite::SQLite(), paste0(fpath, dbfile))
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Articles;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Journals;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Authors;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Articles_Journals;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Articles_Authors;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE IF NOT EXISTS Authors(
+authorID INTEGER PRIMARY KEY AUTOINCREMENT,
+last_name TEXT NOT NULL,
+first_name TEXT NOT NULL,
+initial TEXT,
+affiliation TEXT,
+UNIQUE(last_name, first_name, affiliation)
+);
+```
+
+```{sql connection=dbcon}
+CREATE TABLE IF NOT EXISTS Journals(
+journalID INTEGER PRIMARY KEY AUTOINCREMENT,
+journal_title TEXT NOT NULL,
+volume NUMERIC,
+issue NUMERIC,
+publication_date TEXT,
+UNIQUE(journal_title, publication_date)
+);
+```
+
+```{sql connection=dbcon}
+CREATE TABLE IF NOT EXISTS Articles(
+articleID INTEGER PRIMARY KEY AUTOINCREMENT,
+article_title TEXT NOT NULL,
+created_date DATE NOT NULL,
+UNIQUE(article_title, created_date)
+);
+```
+
+```{sql connection=dbcon}
+CREATE TABLE IF NOT EXISTS Articles_Authors(
+articleID INTEGER NOT NULL,
+authorID INTEGER NOT NULL
+);
+```
+
+```{sql connection=dbcon}
+CREATE TABLE IF NOT EXISTS Articles_Journals(
+articleID INTEGER NOT NULL,
+journalID INTEGER NOT NULL
+);
+```
+
+5. (25 pts / 4 hrs) Extract and transform the data from the XML and then load into the appropriate tables in the database. You cannot (directly and solely) use xmlToDataFrame but instead must parse the XML using a combination of node-by-node tree traversal and XPath. It is not feasible to use XPath to extract all journals, then all authors, etc. as some are missing and won't match up. You will need to iterate through the top-level nodes. While outside the scope of the course, this task could also be done through XSLT. Do not store duplicate authors or journals. For dates, you need to devise a conversion scheme, document your decision, and convert all dates to your encoding scheme.
+
+```{r}
+#install.packages("XML")
+library(XML)
+library(data.table)
+
+xmlFile <- "pubmed_sample.xml"
+fp <- paste0(fpath,xmlFile)
+
+doc <- xmlParse(fp);
+
+
+medline <- getNodeSet(doc, "//PubmedArticleSet/PubmedArticle/MedlineCitation")
+
+articles <- getNodeSet(doc, "//PubmedArticleSet/PubmedArticle/MedlineCitation/Article")
+```
+
+```{r}
+convertToMonth <- function(month) {
+  result = switch (month,
+    "Jan" = "01",
+    "Feb" = "02",
+    "Mar" = "03",
+    "Apr" = "04",
+    "May" = "05",
+    "Jun" = "06",
+    "Jul" = "07",
+    "Aug" = "08",
+    "Sep" = "09",
+    "Oct" = "10",
+    "Nov" = "11",
+    "Dec" = "12"
+  )
+  return (result)
+}
+
+#insert articles into the table Articles
+n.medline <- length(medline)
+for (r in 1:n.medline) {
+  article <- medline[[r]][["Article"]]
+  article.title <- xmlValue(articles[[r]][["ArticleTitle"]])
+  article.created.year <- xmlValue(medline[[r]][["DateCreated"]][["Year"]])
+  article.created.month <- xmlValue(medline[[r]][["DateCreated"]][["Month"]])
+  article.created.day <- xmlValue(medline[[r]][["DateCreated"]][["Day"]])
+  article.date <- paste0(article.created.year, "-", article.created.month, "-", article.created.day)
+  article.created.date <- as.Date(article.date, "%Y-%m-%d")
+  print(article.created.date)
+  
+  #check if the article exists in the database
+  sql <- paste0("SELECT articleID FROM Articles WHERE article_title=\"", article.title, "\" AND created_date=\"", article.created.date,"\";")
+  articleID <- dbGetQuery(dbcon, sql)[1,1]
+  
+  if (is.na(articleID) || is.null(articleID)) {
+    sql <- paste0("INSERT INTO Articles(article_title, created_date) VALUES (\"", article.title, "\", \"", article.created.date, "\");")
+    dbExecute(dbcon, sql)
+    sql <- paste0("SELECT articleID FROM Articles WHERE article_title=\"", article.title, "\" AND created_date=\"", article.created.date,"\";")
+    articleID <- dbGetQuery(dbcon, sql)[1,1]
+  }
+    
+  #insert authors into table Authors
+  authors <- article[["AuthorList"]]
+  n.authors = xmlSize(authors)
+  for (a in 1 : n.authors) {
+    lastname <- xmlValue(authors[a][["Author"]][["LastName"]])
+    firstname <- xmlValue(authors[a][["Author"]][["ForeName"]])
+    initial <- xmlValue(authors[a][["Author"]][["Initials"]])
+    affiliation <- xmlValue(authors[a][["Author"]][["Affiliation"]])
+    if (is.na(affiliation)) {
+      affiliation = NULL
+    }
+    #check if the author exists in the database
+    sql <- paste0("SELECT authorID FROM Authors WHERE last_name=\"", lastname, "\" AND first_name=\"", firstname,"\";")
+    authorID <- dbGetQuery(dbcon, sql)[1,1]
+    if (is.na(authorID) | is.null(authorID)) {
+      sql <- paste0("INSERT INTO Authors(last_name, first_name, initial, affiliation) VALUES (\"", lastname, "\", \"", firstname, "\", \"", initial, "\", \"", affiliation, "\");")
+      dbExecute(dbcon, sql)
+      sql <- paste0("SELECT authorID FROM Authors WHERE last_name=\"", lastname, "\" AND first_name=\"", firstname,"\";")
+      authorID <- dbGetQuery(dbcon, sql)[1,1]
+    }
+    
+    #insert into table Articles_Authors
+    sql <- paste0("INSERT INTO Articles_Authors(articleID, authorID) VALUES (", articleID, ", ", authorID, ");")
+    dbExecute(dbcon, sql)
+  }
+  
+    #insert journals into table Journals
+    journals <- article[["Journal"]]
+    n.journals <- length(journals)
+    for (a in 1:n.journals) {
+      title <- xmlValue(journals[["Title"]][[a]])
+      volume <- xmlValue(journals[["JournalIssue"]][["Volume"]][[a]])
+      issue <- xmlValue(journals[["JournalIssue"]][["Issue"]][[a]])
+      medlinedate <- journals[["JournalIssue"]][["PubDate"]][["MedlineDate"]][[a]]
+      if (is.null(medlinedate)) {
+        year <- xmlValue(journals[["JournalIssue"]][["PubDate"]][["Year"]][[a]])
+        month <- xmlValue(journals[["JournalIssue"]][["PubDate"]][["Month"]][[a]])
+      } else {
+        med <- xmlValue(medlinedate)
+        year <- as.integer(substring(med, 0, 4))
+        month <- substring(med, 6, 8)
+      }
+      if (is.null(month) | is.na(month)) {
+        date.str <- year
+      } else {
+        month = convertToMonth(month)
+        date.str <- paste0(month,"-", year)
+      }
+      
+      sql <- paste0("SELECT journalID FROM Journals WHERE journal_title=\"", title, "\" AND publication_date=\"", date.str,"\";")
+      journalID <- dbGetQuery(dbcon, sql)[1,1]
+      if (is.na(journalID) || is.null(journalID)) {
+        sql <- paste0("INSERT INTO Journals(journal_title, volume, issue, publication_date) VALUES (\"", title, "\", ", volume, ", ", issue, ", \"", date.str, "\");")
+        dbExecute(dbcon, sql)
+        sql <- paste0("SELECT journalID FROM Journals WHERE journal_title=\"", title, "\" AND publication_date=\"", date.str,"\";")
+        journalID <- dbGetQuery(dbcon, sql)[1,1]
+      }
+      
+      #insert into table Articles_Authors
+      sql <- paste0("INSERT INTO Articles_Journals(articleID, journalID) VALUES (", articleID, ", ", journalID, ");")
+      dbExecute(dbcon, sql)
+    }
+  
+}
+```  
+
+```{sql connection=dbcon}
+SELECT * FROM Articles;
+```
+
+```{sql connection=dbcon}
+SELECT * FROM Journals;
+```
+
+```{sql connection=dbcon}
+SELECT * FROM Articles_Journals;
+```
+
+```{sql connection=dbcon}
+SELECT * FROM Authors;
+```
+
+```{sql connection=dbcon}
+SELECT * FROM Articles_Authors;
+```
+```{r}
+dbDisconnect(dbcon)
+```

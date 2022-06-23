@@ -1,0 +1,15 @@
+"0","library(RSQLite)"
+"0","library(sqldf)"
+"2","Loading required package: gsubfn
+"
+"2","Loading required package: proto
+"
+"2","Warning in fun(libname, pkgname) :"
+"2","
+ "
+"2"," couldn't connect to display ""/private/tmp/com.apple.launchd.oLTbSsRdhm/org.xquartz:0""
+"
+"0","dbfile = ""MediaDB.db"""
+"0","fpath = ""/Users/pengqing/"""
+"0",""
+"0","dbcon <- dbConnect(RSQLite::SQLite(), paste0(fpath, dbfile))"

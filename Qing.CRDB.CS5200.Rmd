@@ -1,0 +1,140 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(RSQLite)
+
+fpath = "/Users/pengqing/"
+dbfile = "assignment3.sqlite"
+
+dbcon <- dbConnect(RSQLite::SQLite(), paste0(fpath, dbfile))
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Course;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Course(
+number TEXT PRIMARY KEY,
+title TEXT NOT NULL,
+lengthInDays INTEGER NOT NULL
+);
+```
+
+```{sql connection=dbcon}
+INSERT INTO Course (number, title, lengthInDays) VALUES
+(1, "Database", 30),
+(2, "Web Development", 45),
+(3, "Data Structure", 50);
+```
+
+```{sql connection=dbcon}
+SELECT * FROM Course;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Subject;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Subject(
+subjectID INTEGER PRIMARY KEY,
+name TEXT NOT NULL
+)
+```
+
+```{sql connection=dbcon}
+INSERT INTO Subject(subjectID, name) VALUES
+(1, "Backend"),
+(2, "Frontend"),
+(3, "ML");
+```
+
+```{sql connection=dbcon}
+SELECT * FROM Subject;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Lesson;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Lesson(
+tid INTEGER PRIMARY KEY,
+title TEXT NOT NULL,
+lengthInHrs INTEGER NOT NULL,
+sid INTEGER NOT NULL,
+FOREIGN KEY (sid) REFERENCES Subject(subjectID)
+);
+```
+
+```{sql connection=dbcon}
+INSERT INTO Lesson(tid, title, lengthInHrs, sid) VALUES
+(1, "machine learning", 88, 3),
+(2, "web dev", 50, 2),
+(3, "database", 80, 1);
+```
+
+```{sql connection=dbcon}
+SELECT * FROM Lesson;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Prerequisite;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Prerequisite(
+tid INTEGER NOT NULL,
+prerequisiteTID INTEGER NOT NULL,
+FOREIGN KEY (tid) REFERENCES Lesson(tid),
+FOREIGN KEY (prerequisiteTID) REFERENCES Lesson(tid)
+)
+```
+
+```{sql connection=dbcon}
+INSERT INTO Prerequisite(tid, prerequisiteTID) VALUES
+(1, 2),
+(1, 3);
+```
+
+```{sql connection=dbcon}
+SELECT * FROM Prerequisite;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Unit;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Unit(
+number TEXT NOT NULL,
+tid INTEGER NOT NULL,
+FOREIGN KEY (number) REFERENCES Course(number),
+FOREIGN KEY (tid) REFERENCES Lesson(tid)
+)
+```
+
+```{sql connection=dbcon}
+INSERT INTO Unit(number, tid) VALUES
+(1, 1),
+(2, 3);
+```
+
+```{sql connection=dbcon}
+SELECT * FROM Unit;
+```
+
+```{r}
+dbDisconnect(dbcon)
+```
+

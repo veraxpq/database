@@ -1,0 +1,424 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+#install.packages("RMySQL")
+library(RMySQL)
+library(dplyr)
+
+mydb<-dbConnect(MySQL(), user='root', password='0608Mysql!', dbname='practicum', host='localhost')
+```
+
+```{r}
+dbListTables(mydb)
+```
+
+```{r}
+sql <- "DROP TABLE IF EXISTS `aircraft_model`;"
+dbExecute(mydb, sql)
+```
+```{r}
+sql <- "CREATE TABLE `aircraft_model` (
+  `amid` int NOT NULL AUTO_INCREMENT,
+  `model` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`amid`)
+);"
+dbExecute(mydb, sql)
+```
+
+```{r}
+sql <- "DROP TABLE IF EXISTS `aircraft_type`;"
+dbExecute(mydb, sql)
+```
+```{r}
+sql <- "CREATE TABLE `aircraft_type` (
+  `atid` int NOT NULL AUTO_INCREMENT,
+  `type` varchar(45) DEFAULT NULL,
+  PRIMARY KEY (`atid`),
+  UNIQUE KEY `type_UNIQUE` (`type`)
+);"
+dbExecute(mydb, sql)
+```
+
+```{r}
+sql <- "DROP TABLE IF EXISTS `aircraft`;"
+dbExecute(mydb, sql)
+```
+
+```{r}
+sql <- "CREATE TABLE `aircraft` (
+  `acid` int NOT NULL AUTO_INCREMENT,
+  `amid` int DEFAULT NULL,
+  `number_of_engines` varchar(10) DEFAULT NULL,
+  `is_large` tinyint DEFAULT NULL,
+  `atid` int DEFAULT NULL,
+  PRIMARY KEY (`acid`),
+  KEY `amid_idx` (`amid`),
+  KEY `atid_idx` (`atid`),
+  CONSTRAINT `amid` FOREIGN KEY (`amid`) REFERENCES `aircraft_model` (`amid`),
+  CONSTRAINT `atid` FOREIGN KEY (`atid`) REFERENCES `aircraft_type` (`atid`)
+);"
+dbExecute(mydb, sql)
+```
+```{r}
+sql <- "DROP TABLE IF EXISTS `airline`;"
+dbExecute(mydb, sql)
+```
+```{r}
+sql <- "CREATE TABLE `airline` (
+  `alid` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(200) DEFAULT NULL,
+  PRIMARY KEY (`alid`)
+);"
+dbExecute(mydb, sql)
+```
+```{r}
+sql <- "DROP TABLE IF EXISTS `airport`;"
+dbExecute(mydb, sql)
+```
+```{r}
+sql <- "CREATE TABLE `airport` (
+  `apid` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(45) DEFAULT NULL,
+  `code` varchar(45) DEFAULT NULL,
+  `state` varchar(45) DEFAULT NULL,
+  PRIMARY KEY (`apid`)
+);"
+dbExecute(mydb, sql)
+```
+```{r}
+sql <- "DROP TABLE IF EXISTS `condition`;"
+dbExecute(mydb, sql)
+```
+```{r}
+sql <- "CREATE TABLE `condition` (
+  `cid` int NOT NULL AUTO_INCREMENT,
+  `sky_condition` varchar(45) DEFAULT NULL,
+  `explanation` varchar(2000) DEFAULT NULL,
+  PRIMARY KEY (`cid`)
+);"
+dbExecute(mydb, sql)
+```
+```{r}
+sql <- "DROP TABLE IF EXISTS `incident`;"
+dbExecute(mydb, sql)
+```
+```{r}
+sql <- "CREATE TABLE `incident` (
+  `iid` int NOT NULL AUTO_INCREMENT,
+  `date` datetime DEFAULT NULL,
+  `origin` varchar(45) DEFAULT NULL,
+  `alid` int DEFAULT NULL,
+  `acid` int DEFAULT NULL,
+  `impact` tinyint DEFAULT NULL,
+  `cid` int DEFAULT NULL,
+  `apid` int DEFAULT NULL,
+  `flightPhase` enum('takeoff','inflight','unkown','landing') DEFAULT NULL,
+  PRIMARY KEY (`iid`),
+  KEY `alid_idx` (`alid`),
+  KEY `acid_idx` (`acid`),
+  KEY `cid_idx` (`cid`),
+  KEY `apid_idx` (`apid`),
+  CONSTRAINT `acid` FOREIGN KEY (`acid`) REFERENCES `aircraft` (`acid`),
+  CONSTRAINT `alid` FOREIGN KEY (`alid`) REFERENCES `airline` (`alid`),
+  CONSTRAINT `apid` FOREIGN KEY (`apid`) REFERENCES `airport` (`apid`),
+  CONSTRAINT `cid` FOREIGN KEY (`cid`) REFERENCES `condition` (`cid`)
+);"
+dbExecute(mydb, sql)
+```
+```{r}
+dbListTables(mydb)
+```
+```{r}
+fn<-'BirdStrikesData.csv'
+
+df.raw<-read.csv(file=fn,
+                 header=T,
+                 stringsAsFactors = F)
+```
+
+```{r}
+head(df.raw)
+```
+```{r}
+library(sqldf)
+```
+Load data into table aircraft_model
+```{r}
+detach("package:RMySQL", unload=TRUE)
+df.aircraft.model <- sqldf("SELECT `Aircraft..Make.Model` AS model FROM `df.raw` GROUP BY model")
+```
+```{r}
+library(RMySQL)
+dbWriteTable(mydb, "aircraft_model", df.aircraft.model, append=TRUE, row.names=FALSE)
+```
+Assign df.aircraft.model to the data frame of table aircraft_model
+```{r}
+df.aircraft.model <- data.frame(tbl(mydb, "aircraft_model"))
+```
+
+Load data into table aircraft_type
+```{r}
+detach("package:RMySQL", unload=TRUE)
+df.aircraft.type <- sqldf("SELECT `Aircraft..Type` AS type FROM `df.raw` GROUP BY type")
+```
+```{r}
+library(RMySQL)
+dbWriteTable(mydb, "aircraft_type", df.aircraft.type, append=TRUE, row.names=FALSE)
+df.aircraft.type <- data.frame(tbl(mydb, "aircraft_type"), TRUE, TRUE)
+```
+Load data into table aircraft
+
+```{r}
+df.aircraft <- data.frame(tbl(mydb, "aircraft"))
+```
+
+
+```{r}
+n.df.raw <- nrow(df.raw)
+for (r in 1:n.df.raw) {
+  amid <- df.aircraft.model$amid[which(
+    df.raw$Aircraft..Make.Model[r] == df.aircraft.model$model)]
+  atid <- df.aircraft.type$atid[which(
+    df.raw$Aircraft..Type[r] == df.aircraft.type$type)]
+  if (df.raw$Is.Aircraft.Large.[r] == "yes") {
+    large <- 1;
+  } else {
+    large <- 0;
+  }
+  number <- df.raw$Aircraft..Number.of.engines.[r]
+  if (is.null(number) | length(number) == 0 | number == "" | number == 'C') {
+    next
+  }
+  command <- paste0("INSERT INTO aircraft(amid, atid, number_of_engines, is_large) VALUES (",
+                          amid,",", atid,",", number,",", large, ");")
+  #print(command)
+  dbExecute(mydb, command)
+}
+
+```
+
+```{r}
+df.aircraft <- data.frame(tbl(mydb, "aircraft"))
+```
+```{r}
+dbReadTable(mydb, "aircraft")
+```
+
+Load data into table airline
+```{r}
+detach("package:RMySQL", unload=TRUE)
+df.airline <- sqldf("SELECT `Aircraft..Airline.Operator` AS name FROM `df.raw` GROUP BY name")
+```
+```{r}
+library(RMySQL)
+dbWriteTable(mydb, "airline", df.airline, append=TRUE, row.names=FALSE)
+df.airline <- data.frame(tbl(mydb, "airline"))
+```
+Load data into table airport
+```{r}
+detach("package:RMySQL", unload=TRUE)
+df.airport <- sqldf("SELECT `Airport..Name` AS name, `Origin.State` AS state FROM `df.raw` GROUP BY name")
+```
+```{r}
+library(RMySQL)
+dbWriteTable(mydb, "airport", df.airport, append=TRUE, row.names=FALSE)
+df.airport <- data.frame(tbl(mydb, "airport"))
+```
+Load data into table condition
+```{r}
+detach("package:RMySQL", unload=TRUE)
+df.condition <- sqldf("SELECT `Conditions..Sky` AS sky_condition FROM `df.raw` GROUP BY sky_condition")
+```
+```{r}
+library(RMySQL)
+dbWriteTable(mydb, "condition", df.condition, append=TRUE, row.names=FALSE)
+df.condition <- data.frame(tbl(mydb, "condition"))
+```
+Load data into table incident
+```{r}
+df.incident <- data.frame(tbl(mydb, "incident"))
+```
+  amid <- df.aircraft.model$amid[which(
+    df.raw$Aircraft..Make.Model[r] == df.aircraft.model$model)]
+  atid <- df.aircraft.type$atid[which(
+    df.raw$Aircraft..Type[r] == df.aircraft.type$type)]
+  if (df.raw$Is.Aircraft.Large.[r] == "yes") {
+    large <- 1;
+  } else {
+    large <- 0;
+  }
+  number <- df.raw$Aircraft..Number.of.engines.[r]
+```{r}
+n.df.raw <- nrow(df.raw)
+for (r in 1:n.df.raw) {
+  date <- df.raw$FlightDate[r]
+  
+  if (!is.null(date) && date != '') {
+    date <- format(as.POSIXct(date,format='%m/%d/%Y %H:%M'),format='%m/%d/%Y')
+    date <- as.Date(date, format = "%m/%d/%Y")
+  } else{
+    next
+  }
+  origin <- df.raw$Origin.State[r]
+  alid <- df.airline$alid[which(
+    df.raw$Aircraft..Airline.Operator[r] == df.airline$name)]
+  amid <- df.aircraft.model$amid[which(
+    df.raw$Aircraft..Make.Model[r] == df.aircraft.model$model)]
+  
+  n.df.ac <- nrow(df.aircraft)
+  for (i in 1:n.df.ac) {
+    if (df.aircraft$amid[i] == amid) {
+      acid <- df.aircraft$acid[i]
+      break
+    }
+  }
+
+  flightPhase <- df.raw$When..Phase.of.flight[r]
+  if(flightPhase == "Landing Roll" || flightPhase == "Approach"){
+    flightPhase = "landing"
+  }else if(flightPhase == "Climb" || flightPhase == "Take-off run"){
+    flightPhase = "takeoff"
+  } else if(flightPhase == "Descent" || flightPhase == "Taxi"){
+    flightPhase = "inflight"
+  } else{
+    flightPhase = "unkown"
+  }
+  
+  
+  impact <- df.raw$Effect..Impact.to.flight[r]
+  if (impact == "None") {
+    impact = 0
+  } else {
+    impact = 1
+  }
+  cid <- df.condition$cid[which(
+    df.raw$Conditions..Sky[r] == df.condition$sky_condition
+  )]
+  apid <- df.airport$apid[which(
+    df.raw$Airport..Name[r] == df.airport$name
+  )]
+  if (is.null(acid) | length(acid) == 0) {
+    print("yes")
+    next
+  }
+  command <- paste0("INSERT INTO incident(date,origin,alid,acid,impact,cid,apid,flightPhase) VALUES (\"",
+                    date,"\",\"",origin,"\",\"",alid,"\",\"",acid,"\",\"",impact,"\",\"",cid,"\",\"",apid,"\",\"",flightPhase,"\");")
+
+  #print(command)
+  dbExecute(mydb, command)
+}
+
+```
+
+
+```{r}
+# construct a SQL query
+sqlCmd = "SELECT * FROM incident"
+
+# send the SQL query to the database
+rs <- dbGetQuery(mydb, sqlCmd)
+head(rs)
+
+```
+```{r}
+# construct a SQL query
+sqlCmd = "SELECT * FROM airport"
+
+# send the SQL query to the database
+rs <- dbGetQuery(mydb, sqlCmd)
+head(rs)
+
+```
+
+```{r}
+dbListTables(mydb)
+```
+
+```{r}
+# construct a SQL query
+sqlCmd = "SELECT * FROM condition"
+
+# send the SQL query to the database
+rs <- dbGetQuery(mydb, sqlCmd)
+head(rs)
+
+```
+```{r}
+# 4
+cmd = "select flightPhase, count(*) as Count
+from incident
+group by flightPhase"
+
+# send the SQL query to the database
+rs <- dbGetQuery(mydb, cmd)
+show(rs)
+
+```
+
+```{r}
+# 5
+sqlCmd = "with countTable as (select flightPhase as flightPhase, count(*) as numIncident
+from incident
+group by flightPhase)
+select flightPhase 
+from countTable 
+where numIncident > (select AVG(numIncident) from countTable);"
+
+# send the SQL query to the database
+rs <- dbGetQuery(mydb, sqlCmd)
+show(rs)
+
+```
+
+```{r}
+#6
+sqlcmd = "SELECT Month(date) AS incidentMonth, ROUND((COUNT(*) / (select MAX(Year(date)) - MIN(Year(date)) + 1 from incident)), 2) AS Count
+FROM incident
+GROUP BY incidentMonth 
+ORDER BY incidentMonth;"
+
+rs <- dbGetQuery(mydb, sqlcmd)
+show(rs)
+```
+
+```{r}
+#7
+#install.packages("tidyverse")
+library(ggplot2)
+sql <- "SELECT YEAR(date) AS Year, COUNT(*) AS Count FROM incident WHERE date BETWEEN '2000-1-1' AND '2011-12-31' GROUP BY YEAR(date)"
+df.incident.year <- data.frame(tbl(mydb, sql(sql)))
+chart <- ggplot(data=df.incident.year, aes(x=Year, y=Count)) +
+    geom_bar(stat="identity") +
+    ggtitle("Average Amount of Incidents per Year") +
+    labs(x="Year", y="Amount of Incidents") +
+    theme_bw() +
+    theme(title=element_text(size=16, color="blue3"))
+print(chart)
+```
+```{r}
+CREATE procedure InsertIncident 
+  @
+AS
+BEGIN
+  
+END
+GO
+```
+
+
+```{r}
+sql <- "DELETE FROM incident";
+dbExecute(mydb, sql)
+```
+```{r}
+sql <- "DELETE FROM airline";
+dbExecute(mydb, sql)
+```
+```{r}
+dbDisconnect(mydb)
+```
+
+

@@ -1,0 +1,92 @@
+---
+title: "Practicum 2 part 2"
+output: html_notebook
+---
+
+```{r connectSQL}
+# install.packages("RMySQL")
+library(RMySQL)
+mydb<-dbConnect(MySQL(), user='root', password='', host='localhost')
+```
+
+```{r connectSQLite}
+library(RSQLite)
+
+fpath = "/Users/pengqing/"
+dbfile = "part1.db"
+
+dbcon <- dbConnect(RSQLite::SQLite(), paste0(fpath, dbfile))
+```
+
+
+```{sql connection=mydb}
+CREATE SCHEMA IF NOT EXISTS starschema;
+```
+
+```{sql connection=mydb}
+USE starschema;
+```
+
+```{sql connection=mydb}
+-- drop the tables if they already exist
+DROP TABLE IF EXISTS starschema.authorFact;
+
+```
+
+## Part 2
+```{sql connection=mydb}
+CREATE TABLE starschema.authorFact(
+authorID INTEGER NOT NULL PRIMARY KEY,
+last_name TEXT NOT NULL,
+first_name TEXT NOT NULL,
+num_article INTEGER,
+avg_pub NUMERIC
+);
+
+```
+
+
+```{r querySQLite}
+sqlCmd <- 
+"SELECT Authors.authorID, first_name, last_name, COUNT(*) AS num_article, ROUND(COUNT(*) / (MAX(SUBSTR(created_date, 1, 4)) - MIN(SUBSTR(created_date, 1, 4)) + 1.0), 2) AS avg_pub
+FROM Authors
+INNER JOIN Articles_Authors ON Authors.authorID = Articles_Authors.authorID
+INNER JOIN Articles ON Articles_Authors.articleID = Articles.articleID
+GROUP BY Authors.authorID;
+"
+Author.df <- dbGetQuery(dbcon, sqlCmd)
+```
+
+
+
+
+```{r writeToTable}
+dbWriteTable(mydb, "authorFact", Author.df, overwrite = T)
+```
+
+```{sql connection=mydb}
+ALTER TABLE authorFact
+DROP COLUMN row_names;
+```
+
+```{sql connection=mydb}
+SELECT *
+FROM starschema.authorFact;
+```
+
+## Part 3
+```{sql connection=mydb}
+-- top 10 pub author
+SELECT *
+FROM starschema.authorFact
+ORDER by num_article DESC
+LIMIT 10;
+```
+
+```{r disconnectSQL}
+dbDisconnect(mydb)
+```
+
+```{r disconnectSQLite}
+dbDisconnect(dbcon)
+```

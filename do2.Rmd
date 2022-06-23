@@ -1,0 +1,180 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+#install.packages("knitr")
+#install.packages("png")
+
+library(knitr)
+library(png)
+knitr::include_graphics("https://i.imgur.com/2WWoPCu.png")
+```
+
+2.
+```{r}
+library(RSQLite)
+
+fpath = "/Users/pengqing/"
+dbfile = "do2.sqlite"
+
+dbcon <- dbConnect(RSQLite::SQLite(), paste0(fpath, dbfile))
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS author;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE IF NOT EXISTS author(
+aid INTEGER PRIMARY KEY AUTOINCREMENT,
+first_name TEXT,
+last_name TEXT
+)
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS genre;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE IF NOT EXISTS genre(
+gid INTEGER PRIMARY KEY AUTOINCREMENT,
+name TEXT
+);
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS book;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE IF NOT EXISTS book(
+bid Text PRIMARY KEY,
+aid NUMERIC,
+title TEXT,
+gid NUMERIC,
+price DECIMAL,
+publish_date DATE,
+description TEXT,
+edition TEXT,
+FOREIGN KEY (aid) REFERENCES author(aid),
+FOREIGN KEY (gid) REFERENCES genre(gid)
+);
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS catalog;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE IF NOT EXISTS catalog(
+cid INTEGER PRIMARY KEY AUTOINCREMENT,
+bid TEXT, 
+FOREIGN KEY (bid) REFERENCES book(bid)
+);
+```
+```{sql connection=dbcon}
+SET NOCOUNT ON
+SET ANSI_WARNINGS OFF;
+```
+3.
+```{r}
+#install.packages("XML")
+library(XML)
+library(data.table)
+
+xmlFile <- "Books-v3.xml"
+fp <- paste0(path,xmlFile)
+
+df <- xmlToDataFrame(fp, stringsAsFactors = FALSE)
+xmlObj <- xmlParse(fp)
+
+head(df)
+```
+
+4.
+```{r}
+q2 <- "//book/@id"
+bid <- xpathSApply(xmlObj, q2)
+  
+n.df <- nrow(df)
+for (r in 1:n.df) {
+  #insert into the table genre if there is no record
+  genre <- df$genre[r]
+  sql <- paste0("SELECT gid FROM genre WHERE name=\"", genre, "\";")
+  gid <- dbGetQuery(dbcon, sql)
+
+  if (is.null(gid) | length(gid) == 0 | nrow(gid) == 0) {
+    sql <- paste0("INSERT INTO genre(name) VALUES (\"", genre, "\");")
+    dbExecute(dbcon, sql)
+  }
+  
+  #insert into the table author if there is no record
+  author <- df$author[r]
+  name.index <- unlist(gregexpr(',', author))[1]
+  firstname <- substring(author, 0, name.index - 1)
+  lastname <- substring(author, name.index + 2, nchar(author))
+
+  sql <- paste0("SELECT aid FROM author WHERE first_name=\"", firstname, "\" AND last_name=\"", lastname, "\";")
+  aid <- dbGetQuery(dbcon, sql)
+
+  if (is.null(aid) | length(aid) == 0 | nrow(aid) == 0) {
+    sql <- paste0("INSERT INTO author(first_name, last_name) VALUES (\"", firstname, "\", \"", lastname, "\");")
+    dbExecute(dbcon, sql)
+  }
+  
+  date <- as.Date(df$publish_date[r], format = "%Y-%m-%d")
+  
+  sql <- paste0("INSERT INTO book(bid, aid, title, gid, price, publish_date, description, edition) VALUES (\"",  bid[r], "\", ", aid, ", \"", df$title[r], "\", ", gid, ", ", df$price[r], ", \"", date, "\", \"", df$description[r], "\", \"", df$edition[r], "\");")
+  dbExecute(dbcon, sql)
+
+}
+
+```
+
+```{sql connection=dbcon}
+SELECT * FROM genre;
+```
+
+```{sql connection=dbcon}
+SELECT * FROM author;
+```
+
+```{sql connection=dbcon}
+SELECT * FROM book;
+```
+5. 
+A.
+```{sql connection=dbcon}
+SELECT COUNT(*) AS 'Number of genres' FROM (
+SELECT gid, COUNT(*) AS count FROM book GROUP BY gid
+)
+WHERE count >= 3;
+```
+
+B.
+```{sql connection=dbcon}
+SELECT strftime('%Y',MAX(publish_date)) AS 'Most Recent Year' FROM book;
+```
+C.
+```{sql connection=dbcon}
+SELECT COUNT(*) AS 'Number Of Books' FROM book;
+```
+```{sql connection=dbcon}
+SELECT AVG(b.price) AS 'Average price', g.name FROM book b
+JOIN genre g ON g.gid = b.gid
+GROUP BY b.gid;
+```
+D.
+```{sql connection=dbcon}
+SELECT AVG(price) FROM book
+SELECT b.title, a.first_name, a.last_name FROM book b
+JOIN author a ON b.aid = a.aid
+WHERE b.price < 0.8 * (
+SELECT AVG(price) FROM book
+) OR b.price > 1.2 * (
+SELECT AVG(price) FROM book
+);
+```

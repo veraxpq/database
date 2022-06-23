@@ -1,0 +1,109 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r, include = FALSE}
+library(RSQLite)
+
+dbfile = "MediaDB.db"
+fpath = "/Users/pengqing/"
+
+dbcon <- dbConnect(RSQLite::SQLite(), paste0(fpath, dbfile))
+```
+```{sql connection=dbcon}
+SELECT * FROM invoice_items;
+```
+
+1.(5 pts) What are the last names, city, and state of all customer who made at least one purchase?
+```{sql connection=dbcon}
+SELECT DISTINCT c.LastName, c.City, c.State
+FROM customers c
+JOIN invoices i
+ON c.CustomerId = i.CustomerId;
+```
+
+2.(5 pts) What are the titles of each albums and the artists who created it?
+```{sql connection=dbcon}
+SELECT al.Title, ar.Name 
+FROM artists ar, albums al
+WHERE ar.ArtistId = al.ArtistId
+GROUP BY al.AlbumId;
+```
+3.(10 pts) What are the total number of unique customers for each country, ordered alphabetically by country who made at least one purchase?
+```{sql connection=dbcon}
+SELECT Country, count() AS Number
+FROM customers 
+WHERE CustomerId IN (
+  SELECT c.CustomerId
+  FROM customers c
+  JOIN invoices i
+  ON c.CustomerId = i.CustomerId
+  GROUP BY c.CustomerId
+) 
+GROUP BY Country
+ORDER BY Country ASC;
+```
+4.(10 pts) How many customers never made a purchase, i.e., they appear in the customers table but not in the invoices table.
+```{sql connection=dbcon}
+SELECT count() AS Count
+FROM customers
+WHERE customerid 
+IN (
+SELECT CustomerId FROM customers i
+WHERE CustomerId 
+NOT IN (
+SELECT CustomerId
+FROM invoices
+GROUP BY CustomerId
+));
+```
+5.(10 pts) What are the names of the albums containing the substring "symphony" in the album title?
+```{sql connection=dbcon}
+SELECT Title
+FROM albums
+WHERE Title
+LIKE '%symphony%';
+```
+6.(15 pts) What is the total "price" of all tracks per artist, i.e., add up the "UnitPrice" column in tracks?
+```{sql connection=dbcon}
+SELECT SUM(t.UnitPrice) AS 'Total Price', ar.Name
+FROM tracks t
+JOIN albums al
+ON t.AlbumId = al.AlbumId
+JOIN artists ar
+ON al.ArtistId = ar.ArtistId
+GROUP BY ar.ArtistId
+ORDER BY ar.Name;
+
+```
+7.(20 pts) Which artist(s) published the most tracks, regardless of type and format? List the artist(s) name(s).
+```{sql connection=dbcon}
+SELECT COUNT(t.TrackId) AS Count, ar.Name 
+FROM tracks t, artists ar, albums al
+WHERE t.AlbumId = al.AlbumId
+AND al.ArtistId = ar.ArtistId
+GROUP BY ar.Name
+ORDER BY Count DESC
+LIMIT 1;
+```
+8.(25 pts) What is the total amount of music for each genre (in hours)? List the genre and time rounded to two decimals.
+```{sql connection=dbcon}
+SELECT g.Name, ROUND(SUM(t.Milliseconds) / 1000.0 / 60 / 60, 2) AS SUM
+FROM genres g, tracks t
+WHERE (
+g.GenreId = t.GenreId
+)
+GROUP BY t.GenreId;
+```
+```{r}
+dbDisconnect(dbcon)
+```
+

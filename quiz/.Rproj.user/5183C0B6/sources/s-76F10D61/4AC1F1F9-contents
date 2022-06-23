@@ -1,0 +1,42 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+```{r}
+#install.packages("sqldf")
+library(sqldf)
+
+# perform SQL queries on the built-in 'iris' data frame
+sqldf("select * from iris limit 5")
+sqldf("select count(*) from iris")
+sqldf("select Species, count(*) from iris group by Species")
+
+# note that each sqldf query actually returns a data frame
+rs <- sqldf("select Species, count(*) as num from iris group by Species")
+mean(rs$num)
+```
+```{r}
+library(RSQLite)
+
+
+dbfile = "MediaDB.db"
+fpath = "/Users/pengqing/"
+
+dbcon <- dbConnect(RSQLite::SQLite(), paste0(fpath, dbfile))
+```
+
+```{r}
+library(sqldf)
+sqldf("select * from invoice_items")
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+

@@ -1,0 +1,8 @@
+"0",""
+"0","# note that each sqldf query actually returns a data frame"
+"0","rs <- sqldf(""select Species, count(*) as num from iris group by Species"")"
+"0","mean(rs$num)"
+"1","[1]"
+"1"," 50"
+"1","
+"

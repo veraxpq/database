@@ -1,0 +1,11 @@
+"0","SELECT count() AS Count
+FROM customers
+WHERE customerid 
+IN (
+SELECT CustomerId FROM customers i
+WHERE CustomerId 
+NOT IN (
+SELECT CustomerId
+FROM invoices
+GROUP BY CustomerId
+));"

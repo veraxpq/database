@@ -1,0 +1,57 @@
+```{r, echo=FALSE}
+library(RSQLite)
+library(sqldf)
+library(dplyr)
+library(tibble)
+dbfile = "MediaDB.db"
+fpath = "/Users/pengqing/a5/"
+dbcon <- dbConnect(RSQLite::SQLite(), paste0(fpath, dbfile))
+
+```
+
+1. (20 pts) In the R Notebook, connect to the SQLite MediaDB.db  Download MediaDB.dbdatabase and then load, using SQL SELECT, the "invoice_items" table into a data frame called rs. Add a new column to rs for the extended price called ExtPrice that is Quantity times Price. Using R, what is the average extended price (rounded to 2 decimals)? Do not use {sql} chunks for this entire question. You must use all R code; to do the query use one of dbExecute(), dbGetQuery(), or dbSendQuery().
+```{r, echo=FALSE}
+rs <- data.frame(tbl(dbcon, "invoice_items"))
+rs <- rs %>%
+  add_column(ExtPrice = round((.$UnitPrice * .$Quantity), 2))
+head(rs)
+```
+```{r, echo=FALSE}
+sqldf('SELECT ROUND((SUM(ExtPrice) / COUNT(*)), 2) AS "Average Extended Price" FROM rs')
+
+```
+
+
+
+
+2. (30 pts) Using sqldf, write a SQL query against the data frame rs from the question above that finds the total amount for each invoice (i.e., the sum of the extended prices for the invoice_items in each invoice) and the number of items in the invoice. So, the result set contains rows that each have the invoice ID, the total, and the number of items.
+
+```{r, echo=FALSE}
+q3 <- sqldf("SELECT InvoiceId, SUM(Quantity) AS Number, SUM(ExtPrice) AS Total
+      FROM rs
+      GROUP BY InvoiceId")
+print(q3)
+```
+3. (30 pts) Using R and the result from the prior question, create a scatter plot of the total number of items in an invoice (x axis) versus the total (y axis). Add proper axis labels.
+
+```{r, echo=FALSE}
+attach(q3)
+plot(Number, Total, main="InvoiceId-Amount Scatterplot",
+     xlab="Number", ylab="Total Price", pch=5)
+```
+4. (15 pts) Write and execute some combination of R code, loops in R, sqldf, dbWriteTable(), direct SQL ALTER and SQL UPDATE statements that applies a 10% discount to the total amount for each invoice if it has more than 5 items and stores that discounted amount in a new column in the invoices table called DiscPrice. This cannot be solved fully in sqldf nor fully with just a single UPDATE. You will need to use a combination of techniques and some creativity. Any approach will be acceptable. 
+```{r, echo=FALSE}
+q4 <- q3 %>%
+  add_column(DiscPrice = if_else(.$Number > 5, round(0.9 * Total, 2), Total))
+print(q4)
+```
+
+5. (5 pts) Using a separate {r} chunk show that the update in (4) executed properly by displaying a part of the table. 
+```{r, echo=FALSE}
+sqldf("SELECT * FROM q4 LIMIT 10")
+```
+
+
+```{r}
+dbDisconnect(dbcon)
+```

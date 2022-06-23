@@ -1,0 +1,205 @@
+---
+title: "Practice SQL with {sql} Chunks"
+author: "Martin Schedlbauer"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(RSQLite)
+
+# the path below is a Windows path specification
+# on MacOS there is no c:/
+fpath = "/Users/pengqing/"
+dbfile = "orgdb.db"
+
+dbcon <- dbConnect(RSQLite::SQLite(), paste0(fpath,dbfile))
+```
+
+Turn on support for foreign key constraint checking
+
+```{sql connection=dbcon}
+PRAGMA foreign_keys = ON
+```
+
+```{sql connection=dbcon}
+select * from Worker
+```
+
+```{sql connection=dbcon, output.var="workers.df"}
+select * from Worker
+```
+
+```{r}
+print(workers.df)
+```
+
+```{r}
+sqlcmd <- "select * from Worker"
+workers.df <- dbGetQuery(con = dbcon, sqlcmd)
+print(workers.df)
+```
+
+```{r}
+dbListTables(dbcon)
+dbListFields(dbcon, "Worker")
+```
+
+Retrieve the last names of all workers under the new column name LastName.
+```{sql connection=dbcon}
+SELECT LAST_NAME AS LastName 
+FROM Worker;
+```
+Retrieve the first names of all workers in upper case.
+```{sql connection=dbcon}
+SELECT UPPER(FIRST_NAME)
+FROM Worker;
+```
+Retrieve the names of all departments without duplicates.
+```{sql connection=dbcon}
+SELECT DISTINCT DEPARTMENT 
+FROM Worker;
+```
+
+Retrieve the first three characters of all last names of all workers.
+```{sql connection=dbcon}
+SELECT substr(LAST_NAME, 1, 3) 
+FROM Worker;
+```
+Which worker's last names end with the character 'a'?
+```{sql connection=dbcon}
+SELECT *
+FROM Worker
+WHERE LAST_NAME LIKE '%a';
+```
+Retrieve the first names of all workers and remove any potential leading whitespace (Hint: use rtrim()).
+```{sql connection=dbcon}
+SELECT rtrim(FIRST_NAME)
+FROM Worker;
+```
+Assume that some department names have trailing whitespace. Retrieve the unique names of all departments with any trailing whitespace removed.
+```{sql connection=dbcon}
+SELECT DISTINCT rtrim(DEPARTMENT)
+FROM Worker;
+```
+Write an SQL query to list the FIRST_NAME and LAST_NAME from the Worker table into a single column COMPLETE_NAME in the form last, first, e.g., Patel, Vivek. (Hint: SQLite does not support the concat() function; instead it uses the || operator).
+```{sql connection=dbcon}
+SELECT (LAST_NAME || ',' || FIRST_NAME) AS COMPLETE_NAME
+FROM Worker;
+```
+Retrieve all Worker information sorted by LAST_NAME in ascending order.
+```{sql connection=dbcon}
+SELECT *
+FROM Worker
+ORDER BY LAST_NAME ASC;
+```
+Retrieve the details for all workers with the first name of “Vipul” or “Satish”.
+```{sql connection=dbcon}
+SELECT *
+FROM Worker
+WHERE FIRST_NAME = 'Vipul'
+OR FIRST_NAME = 'Satish';
+```
+Retrieve the details for all workers that do not have the first name of either “Vipul” or “Satish”.
+```{sql connection=dbcon}
+SELECT *
+FROM Worker
+WHERE FIRST_NAME IS NULL
+OR FIRST_NAME = 'Satish'
+OR FIRST_NAME = 'Vipul';
+```
+Which workers have a salary between 100,000 and 500,000? List their last name, first name, and salary in thousands (e.g., 100 rather than 100,000), in that order.
+```{sql connection=dbcon}
+SELECT LAST_NAME, FIRST_NAME, SALARY/1000 AS SALARY
+FROM Worker
+WHERE
+SALARY BETWEEN 100000 AND 500000;
+```
+Which workers have a last name that starts with 'S'?
+```{sql connection=dbcon}
+SELECT * FROM Worker
+WHERE
+LAST_NAME LIKE 'S%';
+```
+Which employees joined the company in February 2014? Note that SQLite does not support the year() and month() SQL functions.
+```{sql connection=dbcon}
+SELECT *
+FROM Worker
+WHERE JOINING_DATE LIKE '14-02%';
+```
+How many employees work in the department ‘Admin’?
+```{sql connection=dbcon}
+SELECT COUNT(*)
+FROM Worker
+WHERE DEPARTMENT = 'Admin';
+```
+How many workers work for each department? List the department and number of workers in the descending order of numbers.
+```{sql connection=dbcon}
+SELECT DEPARTMENT, COUNT(*) AS COUNT
+FROM Worker
+GROUP BY DEPARTMENT
+ORDER BY COUNT DESC;
+```
+List the first name of all workers who are managers.
+```{sql connection=dbcon}
+SELECT FIRST_NAME
+FROM Worker
+WHERE DEPARTMENT = 'Admin';
+```
+Retrieve the first ten records (rows) from the Worker table sorted by salary from highest to smallest.
+```{sql connection=dbcon}
+SELECT *
+FROM Worker
+ORDER BY SALARY DESC
+LIMIT 10;
+```
+Which employees have the same salary? List their first name and salary.
+```{sql connection=dbcon}
+SELECT a.FIRST_NAME, a.SALARY, b.FIRST_NAME, b.SALARY
+FROM Worker a
+JOIN Worker b
+ON a.SALARY = b.SALARY
+AND a.FIRST_NAME != b.FIRST_NAME;
+```
+Which departments that have fewer than five people in it?
+```{sql connection=dbcon}
+SELECT DEPARTMENT, COUNT(WORKER_ID) AS 'Number of Workers'
+FROM Worker
+GROUP BY DEPARTMENT
+HAVING COUNT(WORKER_ID) < 5;
+```
+Which employees have the highest salary in each department?
+```{sql connection=dbcon}
+SELECT *
+FROM (
+SELECT max(SALARY) AS TotalSalary, DEPARTMENT 
+FROM Worker
+GROUP BY DEPARTMENT
+) 
+AS TempNew
+INNER JOIN WORKER t
+ON TempNew.DEPARTMENT = t.DEPARTMENT
+AND TempNew.TotalSalary = t.Salary;
+```
+What is the total salary paid out to all employees for each department?
+```{sql connection=dbcon}
+SELECT DEPARTMENT, SUM(SALARY) AS SUM
+FROM Worker
+GROUP BY DEPARTMENT;
+```
+Who are the employees who earn the highest salary?
+```{sql connection=dbcon}
+SELECT *
+FROM Worker
+WHERE SALARY = (
+SELECT max(SALARY)
+FROM Worker
+);
+```
+
+
+```{r}
+dbDisconnect(dbcon)
+```
+

@@ -1,0 +1,9 @@
+"0","SELECT SUM(t.UnitPrice) AS 'Total Price', ar.Name
+FROM tracks t
+JOIN albums al
+ON t.AlbumId = al.AlbumId
+JOIN artists ar
+ON al.ArtistId = ar.ArtistId
+GROUP BY ar.ArtistId
+ORDER BY ar.Name;
+"

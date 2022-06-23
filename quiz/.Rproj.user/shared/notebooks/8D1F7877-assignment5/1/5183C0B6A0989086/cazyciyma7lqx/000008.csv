@@ -1,0 +1,5 @@
+"0","#install.packages(""sqldf"")"
+"0","library(sqldf)"
+"0",""
+"0","# perform SQL queries on the built-in 'iris' data frame"
+"0","sqldf(""select * from iris limit 5"")"

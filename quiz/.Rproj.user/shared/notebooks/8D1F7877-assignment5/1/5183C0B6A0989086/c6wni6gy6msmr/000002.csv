@@ -1,0 +1,4 @@
+"0","library(sqldf)"
+"0","sqldf(""select * from invoice_items"")"
+"2","Error: no such table: invoice_items
+"

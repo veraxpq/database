@@ -1,0 +1,4 @@
+"0","SELECT DISTINCT c.LastName, c.City, c.State
+FROM customers c
+JOIN invoices i
+ON c.CustomerId = i.CustomerId;"
